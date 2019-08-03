@@ -1,102 +1,173 @@
-/*Psuedocode
-LIRI will take in the following commands:
-'concert-this'
-Input example: `node liri.js concert-this <artist/band name here>`
-API example: ("https://rest.bandsintown.com/artists/" + artist + "/events?app_id=codingbootcamp")
-This searches the Bands in Town Artist Events API for an artist and renders;
-- name of the venue
-- venue location
-- date of the event (using moment to format it as MM/DD/YYYY)
-'spotify-this-song'
-eg `node liri.js spotify-this-song '<song name here>'`
-Make sure to utilise the node-spotify-api
-This shows:
-- Artist
-- The song's name
-- A preview link of the song from Spotify
-- The album that the song is from
-If no song is provided, then the program will default to "The Sign" by Ace of Base
-'movie-this'
-eg `node liri.js movie-this '<movie name here>'`
-This outputs:
-- Title of the movie.
-- Year the movie came out.
-- IMDB Rating of the movie.
-- Rotten Tomatoes Rating of the movie.
-- Country where the movie was produced.
-- Language of the movie.
-- Plot of the movie.
-- Actors in the movie.
-If no movie is entered the program defaults to 'Mr Nobody'
-This requires an API key and axios to work. Use 'trilogy' for the key
-'do-what-it-says'
-eg: `node liri.js do-what-it-says`
-This utilises the 'fs' Node package and LIRI will take the text inside of random.txt and use it to call a command.
-If a song name is in there, it'll use spotify, a movie - OMDB and and artist's name will show concert details
-Every log is appended to a new file called log.txt*/
-
-//Code required to read and set any environment variables with the dotenv package
+//packages
 require("dotenv").config();
-
-//This will import the keys and store them into a variable
+var axios = require("axios");
+var Spotify = require("node-spotify-api");
+var moment = require("moment");
 var keys = require("./keys.js");
+var spotify = new Spotify(keys.spotify);
+var fs = require("fs");
 
-//requiring all of the APIs and dependencies
-var fileSystem = require('fs');
-var Spotify = require('node-spotify-api');
-var OmdbApi = require('omdb-api-pt')
-var axios = require('axios');
-var dotenv = require('dotenv').config()
-var inquirer = require("inquirer");
+//command line commands
+function commands() {
+    switch(process.argv[2]) {
+        case "concert-this":
+            concertThis();
+            break;
+        case "spotify-this":
+            spotifyThis();
+            break;
+        case "movie-this":
+            movieThis();
+            break;
+        case "do-what-it-says":
+            doThis();
+            break;
+        default:
+            console.log("Welcome to Liri! Please enter one of these options");
+            console.log("concert-this");
+            console.log("spotify-this");
+            console.log("movie-this");
+            console.log("do-what-it-says");
+            break;
+    }
+}
+commands();
 
-//Storing the user's input, either concert-this, spotify-this-song and movie-this into a variable
-var action = process.argv[2];
-var input = process.argv[3];
-
-var spotify = new Spotify({
-    id: "082bd53c5a74478297b8dd55ae9d644f",
-    secret: "1cf695c4ec8f48ac8474f529e8b94b93"
-  });
-
-
-  //Having this at the start is making it show every time. Not what we need
-// inquirer.prompt([
-//     {
-//         type: "input",
-//         message: "Hi there! I'm LIRI. Lets find out some information together! \n What's your name?",
-//         name: "username"
-//       }
-
-// ])
-// .then(function(inquirerResponse) {
-//     var username = inquirerResponse.username;
-//     console.log("Nice to meet you, " + username + "!");
-//     console.log("Please feel free to search for a concert, song information or movie details!");
-// });
-
-switch (action) {
-    case "concert-this":
-        console.log("Concert");
-        break;
-
-    case "spotify-this-song":
-        console.log("Song details");
-        break;
-    
-    case "movie-this":
-        console.log("Movie details");
-        break;
+//concert this command
+function concertThis() {
+    var queryURL = "https://rest.bandsintown.com/artists/" + process.argv[3] + "/events?app_id=codingbootcamp";
+    //if user did input a value
+    if (process.argv[3] !== undefined) {
+        axios.get(queryURL).then(
+            function(response) {
+                //if no concerts show up, show error message
+                if (response.data.length === 0) {
+                    console.log("No concerts available at the time.");
+                //if there are concerts available, log concert info
+                } else {
+                    for (var i in response.data) {
+                        console.log("Venue: " + response.data[i].venue.name);
+                        console.log("Location: " + response.data[i].venue.city + ", " + response.data[i].venue.region);
+                        console.log("Event Date: " + moment(response.data[i].datetime).format("MM/DD/YYYY"));
+                        console.log("---");
+                    }
+                }
+            }
+        ).catch(
+            function(err) {
+                console.log("Error occurred: " + err);
+            }
+        )
+    //error message if user did not input a value
+    } else {
+        console.log("Please input an artist after concert-this.");
+    }
 }
 
-
-function concertDetails() {
-
+//spotify this command
+function spotifyThis() {
+    //if user did input a value, use value in spotify call function
+    if (process.argv[3] !== undefined) {
+        spotifyCall(process.argv[3]);
+    //if not, search spotify for the sign
+    } else {
+        spotifyCall("The Sign Ace of Base");
+    }
 }
 
-function spotifySearch() {
-
+function spotifyCall(song) {
+    spotify.search({
+        type: "track",
+        query: song,
+        limit: 5
+    }).then(
+        function(response) {
+            //loop to get spotify info
+            for (var i in response.tracks.items) {
+                //double loop to get all artist names
+                for (var j in response.tracks.items[i].artists) {
+                    console.log("Artist: " + response.tracks.items[i].artists[j].name);
+                }
+                console.log("Song Name: " + response.tracks.items[i].name);
+                console.log("Album: " + response.tracks.items[i].album.name);
+                if (response.tracks.items[i].preview_url === null) {
+                    console.log("Song Preview: Not Available");
+                } else {
+                    console.log("Song Preview: " + response.tracks.items[i].preview_url);
+                }
+                console.log("---");
+            }
+        }
+    ).catch(function(err) {
+        if (err) {
+            return console.log('Error occurred: ' + err);
+        }
+    })
 }
 
-function movieInfo() {
-
+//moviethis command
+function movieThis() {
+    //if user did input a value, use value in omdb call function
+    if (process.argv[3] !== undefined) {
+        omdbCall(process.argv[3]);
+    //if not, search for mr.nobody in omdb instead
+    } else {
+        omdbCall("mr.nobody");
+    }
 }
+
+function omdbCall(movie) {
+    var queryURL = "http://www.omdbapi.com/?t=" + movie + "&apikey=e78640ca";
+    axios.get(queryURL).then(
+        function(response) {
+            //log all movie info
+            console.log("Title: " + response.data.Title);
+            console.log("Released: " + response.data.Year);
+            console.log("IMDB Rating: " + response.data.imdbRating);
+            console.log("Rotten Tomatoes Rating: " + response.data.Ratings[1].Value);
+            console.log("Country Produced: " + response.data.Country);
+            console.log("Language: " + response.data.Language);
+            console.log("Plot: " + response.data.Plot);
+            console.log("Actors: " + response.data.Actors);
+        }
+    ).catch(function(err) {
+        if (err) {
+            return console.log('Error occurred: ' + err);
+        }
+    })
+}
+
+//do-what-it-says command
+function doThis() {
+    //read the random.txt file
+    fs.readFile("random.txt", "utf8", function(err, data) {
+        if (err) {
+            return console.log('Error occurred: ' + err);
+        }
+        //remove \n and \r and split at the comma
+        var dataArr = data.replace(/[\n\r]/g, '').split(",");
+        //random index in array
+        var index = Math.floor(Math.random() * dataArr.length);
+        //if index is divisible by 2
+        if (index % 2 === 0) {
+            //get the command
+            process.argv[2] = dataArr[index];
+            //move up an index to get the input value
+            process.argv[3] = dataArr[index + 1];
+        } else {
+            //move down an index to get command
+            process.argv[2] = dataArr[index - 1];
+            //get input value
+            process.argv[3] = dataArr[index];
+        }
+        //call command function again with new values
+        commands();
+    })
+}
+
+//appends the command and value into log.txt
+fs.appendFile("log.txt", process.argv[2] + " " + process.argv[3] + "\n", function(err) {
+    if (err) {
+        return console.log('Error occurred: ' + err);
+    }
+})
